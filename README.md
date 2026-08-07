@@ -42,10 +42,9 @@ PATA AI is an intelligent address parsing and geocoding platform that:
 ## Demo
 
 Live Demo:
-https://...
+
 
 Video Demo:
-https://youtube.com/...
 
 ---
 
