@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { ArrowRight, MapPin, Shield, Layers, Code, Zap } from "lucide-react";
 
