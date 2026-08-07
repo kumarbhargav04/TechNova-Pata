@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database with PostGIS Extension
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: pataai_postgres
+    environment:
+      POSTGRES_DB: pata_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supersecurepassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pata_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Cache and Celery Message Broker
+  redis:
+    image: redis:7.2-alpine
+    container_name: pataai_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. FastAPI Web Application
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: pataai_backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:supersecurepassword@postgres:5432/pata_ai
+      - REDIS_URL=redis://redis:6379/0
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. Celery Worker for Bulk Async Upload Handling
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: pataai_worker
+    command: celery -A app.tasks worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:supersecurepassword@postgres:5432/pata_ai
+      - REDIS_URL=redis://redis:6379/0
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - redis
+      - postgres
+
+volumes:
+  postgres_data:
+  redis_data:

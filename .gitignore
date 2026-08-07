@@ -1,0 +1,78 @@
+# ========================
+# Python / Backend
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ========================
+# Node.js / Frontend
+# ========================
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.local
+.env.*.local
+pata-ai/.env
+pata-ai/backend/.env
+pata-ai/frontend/.env
+pata-ai/frontend/.env.local
+
+# ========================
+# IDE / Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ========================
+# Database files
+# ========================
+*.db
+*.sqlite3
+pata-ai/database/*.db
+
+# ========================
+# Logs
+# ========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# OS generated
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# ========================
+# Misc
+# ========================
+copy_nul
+*.bak
+*.tmp

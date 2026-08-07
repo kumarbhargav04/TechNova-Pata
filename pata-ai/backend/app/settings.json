@@ -1,0 +1,6 @@
+{
+  "caching_enabled": true,
+  "llm_timeout_seconds": 10.0,
+  "fallback_confidence_threshold": 70.0,
+  "cache_ttl_hours": 24
+}

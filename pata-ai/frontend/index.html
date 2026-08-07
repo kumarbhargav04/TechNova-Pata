@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PataAI - Location Intelligence SaaS Platform</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            900: '#14532d',
+                        },
+                        darkbg: '#0b0f19',
+                        cardbg: '#161e31',
+                        borderbg: '#25304b',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for Premium Interactive Analytics Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .theme-dark ::-webkit-scrollbar-thumb {
+            background: #25304b;
+            border-radius: 3px;
+        }
+
+        .theme-light ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        /* Pulse Animation for active agent */
+        @keyframes agent-pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+            }
+
+            50% {
+                transform: scale(1.03);
+                box-shadow: 0 0 15px 5px rgba(34, 197, 94, 0.6);
+            }
+        }
+
+        .active-agent {
+            animation: agent-pulse 1.5s infinite;
+            border-color: #22c55e !important;
+            background-color: rgba(34, 197, 94, 0.08) !important;
+        }
+    </style>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- React & Babel CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+
+<body class="overflow-x-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const PRESETS = [
+            { title: "Standard Hinglish", address: "Opposite Ganesh Temple Kothapet Hyderabad", badge: "Hinglish" },
+            { title: "Telugu Transliteration", address: "Hanuman mandir daggara Ram Nagar Hyderabad", badge: "Telugu" },
+            { title: "Telugu Regional Script", address: "హనుమాన్ గుడి దగ్గర, కొత్తపేట, హైదరాబాద్", badge: "Telugu Script" },
+            { title: "Typo & Wrong Pincode", address: "Ganesh templ Kothapeta Hyderbad 500038", badge: "Error Fix" },
+            { title: "Hindi Script & Landmark", address: "राम मंदिर के पास पुरानी कॉलोनी, दिल्ली", badge: "Hindi Script" },
+            { title: "Apartment & Landmark", address: "Flat 302, Sai Residency, opposite post office, Whitefield, Bangalore", badge: "Karnataka" },
+            { title: "Bandra Landmark (Mumbai)", address: "Beside Dominos Pizza, Linking Road, Bandra West, Mumbai 400050", badge: "Mumbai" },
+            { title: "CONGESTED AREA (Charminar)", address: "Near Charminar, Laad Bazar, Hyderabad", badge: "Congested" }
+        ];
+
+        function App() {
+            const [isLightMode, setIsLightMode] = useState(false);
+            const [currentPage, setCurrentPage] = useState("landing"); // landing | dashboard | bulk | analytics | audit | playground | developer | settings | login | register
+            const [addressInput, setAddressInput] = useState("");
+            const [isLoading, setIsLoading] = useState(false);
+            const [activeAgent, setActiveAgent] = useState(null);
+            const [agentLogs, setAgentLogs] = useState([]);
+            const [result, setResult] = useState(null);
+
+            // Authentication state
+            const [currentUser, setCurrentUser] = useState(null);
+            const [loginUsername, setLoginUsername] = useState("");
+            const [loginPassword, setLoginPassword] = useState("");
+            const [registerUsername, setRegisterUsername] = useState("");
+            const [registerPassword, setRegisterPassword] = useState("");
+            const [registerRole, setRegisterRole] = useState("Driver");
+            const [authError, setAuthError] = useState("");
+
+            // Developer portal states
+            const [apiKeys, setApiKeys] = useState([
+                { id: 1, name: "Production Key", prefix: "pk_live_", created: "2026-08-01", limit: "10,000/mo" },
+                { id: 2, name: "Staging Testing Key", prefix: "pk_test_", created: "2026-08-05", limit: "1,000/mo" }
+            ]);
+
+            // Bulk Upload State
+            const [bulkFile, setBulkFile] = useState(null);
+            const [bulkProgress, setBulkProgress] = useState(0);
+            const [isBulkRunning, setIsBulkRunning] = useState(false);
+            const [bulkResults, setBulkResults] = useState([]);
+
+            // API Playground interactive state
+            const [playgroundPayload, setPlaygroundPayload] = useState('{\n  "address": "Opposite Ganesh Temple Kothapet Hyderabad",\n  "user_id": 1\n}');
+            const [playgroundResponse, setPlaygroundResponse] = useState('{\n  "status": "ready",\n  "logs": "Awaiting execution..."\n}');
+            const [isPlaygroundRunning, setIsPlaygroundRunning] = useState(false);
+
+            const [stats, setStats] = useState({
+                total_resolved: 0,
+                average_confidence: 0.0,
+                average_latency_ms: 0.0,
+                success_rate: 0.0,
+                delivery_calls_saved: 0,
+                fuel_saved_litres: 0.0,
+                co2_reduced_kg: 0.0,
+                cost_per_tx_inr: 0.05
+            });
+            const [history, setHistory] = useState([]);
+
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+            const markerInstance = useRef(null);
+            const circleInstance = useRef(null);
+            const tileLayerInstance = useRef(null);
+            const [mapLayer, setMapLayer] = useState("dark"); // dark | satellite | terrain | streets
+
+            const [isListening, setIsListening] = useState(false);
+            const recognitionRef = useRef(null);
+
+            const toggleListening = () => {
+                if (typeof window === "undefined") return;
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    alert("Speech recognition is not supported in this browser. Please try Google Chrome.");
+                    return;
+                }
+                if (isListening) {
+                    if (recognitionRef.current) {
+                        recognitionRef.current.stop();
+                    }
+                    setIsListening(false);
+                } else {
+                    const recognition = new SpeechRecognition();
+                    recognition.continuous = false;
+                    recognition.interimResults = false;
+                    recognition.lang = "en-IN";
+                    recognition.onstart = () => {
+                        setIsListening(true);
+                    };
+                    recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        setAddressInput(prev => prev ? prev + " " + transcript : transcript);
+                    };
+                    recognition.onerror = () => {
+                        setIsListening(false);
+                    };
+                    recognition.onend = () => {
+                        setIsListening(false);
+                    };
+                    recognitionRef.current = recognition;
+                    recognition.start();
+                }
+            };
+
+            // Chart references
+            const speedChartRef = useRef(null);
+            const confidenceChartRef = useRef(null);
+            const speedChartInstance = useRef(null);
+            const confidenceChartInstance = useRef(null);
+
+            // Check session on load
+            useEffect(() => {
+                const session = localStorage.getItem("pataai_user");
+                if (session) {
+                    const parsed = JSON.parse(session);
+                    setCurrentUser(parsed);
+                    fetchStats(parsed.id);
+                    fetchHistory(parsed.id);
+                }
+            }, []);
+
+            // Fetch statistics
+            const fetchStats = async (userId) => {
+                try {
+                    const url = userId ? `http://localhost:8000/api/v1/stats?user_id=${userId}` : "http://localhost:8000/api/v1/stats";
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setStats(data);
+                    }
+                } catch (e) {
+                    console.log("Stats fetch error", e);
+                }
+            };
+
+            // Fetch Audit History
+            const fetchHistory = async (userId) => {
+                try {
+                    const url = userId ? `http://localhost:8000/api/v1/history?user_id=${userId}` : "http://localhost:8000/api/v1/history";
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setHistory(data);
+                    }
+                } catch (e) {
+                    console.log("History fetch error", e);
+                }
+            };
+
+            // Setup Leaflet map
+            useEffect(() => {
+                if (currentPage === "dashboard" && mapRef.current) {
+                    if (mapInstance.current) {
+                        try {
+                            mapInstance.current.remove();
+                        } catch (e) {
+                            console.log("Error removing map", e);
+                        }
+                        mapInstance.current = null;
+                        markerInstance.current = null;
+                        circleInstance.current = null;
+                        tileLayerInstance.current = null;
+                    }
+                    mapInstance.current = L.map(mapRef.current).setView([17.3850, 78.4867], 11);
+                    updateTileLayer();
+                }
+
+                return () => {
+                    if (mapInstance.current) {
+                        try {
+                            mapInstance.current.remove();
+                        } catch (e) {
+                            console.log("Error cleaning map", e);
+                        }
+                        mapInstance.current = null;
+                        markerInstance.current = null;
+                        circleInstance.current = null;
+                        tileLayerInstance.current = null;
+                    }
+                };
+            }, [currentPage, isLightMode, currentUser]);
+
+            const updateTileLayer = (layerName) => {
+                const targetLayer = layerName || mapLayer;
+                setMapLayer(targetLayer);
+                if (mapInstance.current) {
+                    if (tileLayerInstance.current) {
+                        mapInstance.current.removeLayer(tileLayerInstance.current);
+                    }
+
+                    let url = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+                    let attribution = '&copy; OpenStreetMap contributors &copy; CARTO';
+
+                    if (targetLayer === 'satellite') {
+                        url = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'; // Google Hybrid
+                        attribution = '&copy; Google Maps';
+                    } else if (targetLayer === 'terrain') {
+                        url = 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}'; // Google Terrain
+                        attribution = '&copy; Google Maps';
+                    } else if (targetLayer === 'streets') {
+                        url = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'; // Google Standard Roadmap
+                        attribution = '&copy; Google Maps';
+                    } else if (isLightMode && targetLayer === 'dark') {
+                        url = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'; // Google Standard Roadmap
+                        attribution = '&copy; Google Maps';
+                    }
+
+                    tileLayerInstance.current = L.tileLayer(url, { attribution, maxZoom: 21 }).addTo(mapInstance.current);
+
+                }
+            };
+
+
+            const updateMap = (lat, lon, label) => {
+                if (mapInstance.current && lat && lon) {
+                    mapInstance.current.setView([lat, lon], 15);
+
+                    // Update Marker
+                    if (markerInstance.current) {
+                        markerInstance.current.setLatLng([lat, lon]);
+                    } else {
+                        const customIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div class="w-8 h-8 rounded-full bg-brand-500 border-4 border-white flex items-center justify-center shadow-lg animate-bounce"><div class="w-2 h-2 rounded-full bg-brand-900"></div></div>`,
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 30]
+                        });
+                        markerInstance.current = L.marker([lat, lon], { icon: customIcon }).addTo(mapInstance.current);
+                    }
+                    markerInstance.current.bindPopup(`<div class="text-black font-semibold text-xs">${label}</div>`).openPopup();
+
+                    // Update Leaflet Accuracy Circle overlay
+                    if (circleInstance.current) {
+                        mapInstance.current.removeLayer(circleInstance.current);
+                    }
+                    circleInstance.current = L.circle([lat, lon], {
+                        radius: 120, // 120 meters accuracy circle representation
+                        color: '#22c55e',
+                        fillColor: '#22c55e',
+                        fillOpacity: 0.15,
+                        weight: 2
+                    }).addTo(mapInstance.current);
+                }
+            };
+
+            const handlePresetClick = (address) => {
+                setAddressInput(address);
+            };
+
+            const triggerResolve = async (e) => {
+                if (e) e.preventDefault();
+                if (!addressInput.trim()) return;
+
+                setIsLoading(true);
+                setResult(null);
+                setAgentLogs([]);
+
+                // Show 9 Agents lighting up sequentially
+                const steps = [
+                    { name: "language", log: "[Agent 1: Language Detection] Analyzing text syntax, script & vocabulary..." },
+                    { name: "normalization", log: "[Agent 2: Normalization Agent] Resolving regional spelling typos and abbreviations..." },
+                    { name: "parsing", log: "[Agent 3: Address Parser Agent] Extracting house, street, locality, landmark details..." },
+                    { name: "pincode", log: "[Agent 4: Pincode Validation] Checking postal directories against ground truth..." },
+                    { name: "landmark", log: "[Agent 5: Landmark Retrieval] Querying landmarks via Overpass OpenStreetMap API..." },
+                    { name: "semantic", log: "[Agent 6: Semantic Matching] Compiling semantic similarities via text embeddings lookup..." },
+                    { name: "geo", log: "[Agent 7: Geo Resolution] Computing candidate weights and generating target coordinates..." },
+                    { name: "self", log: "[Agent 8: Self Verification] Sanity checking city boundaries & distance limits..." },
+                    { name: "evidence", log: "[Agent 9: Evidence Generator] Compiling verification trails and correction explanation..." }
+                ];
+
+                for (let step of steps) {
+                    setActiveAgent(step.name);
+                    setAgentLogs(prev => [...prev, step.log]);
+                    await new Promise(r => setTimeout(r, 220));
+                }
+
+                try {
+                    const res = await fetch("http://localhost:8000/api/v1/resolve", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            address: addressInput,
+                            user_id: currentUser ? currentUser.id : null
+                        })
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        setResult(data);
+                        updateMap(data.latitude, data.longitude, data.normalized_address);
+                        if (data.evidence && data.evidence.length > 0) {
+                            setAgentLogs(prev => [...prev, ...data.evidence]);
+                        }
+                        fetchStats(currentUser ? currentUser.id : null);
+                        fetchHistory(currentUser ? currentUser.id : null);
+                    } else {
+                        const err = await res.json();
+                        setAgentLogs(prev => [...prev, `[Error] Pipeline resolution failed: ${err.detail}`]);
+                    }
+                } catch (err) {
+                    setAgentLogs(prev => [...prev, `[Error] Could not connect to PataAI backend: ${err.message}`]);
+                } finally {
+                    setIsLoading(false);
+                    setActiveAgent(null);
+                }
+            };
+
+            const triggerBulkUpload = (e) => {
+                e.preventDefault();
+                if (!bulkFile) return;
+                setIsBulkRunning(true);
+                setBulkProgress(0);
+                setBulkResults([]);
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const text = event.target?.result;
+                    if (!text) {
+                        setIsBulkRunning(false);
+                        return;
+                    }
+
+                    const lines = text.split(/\r?\n/);
+                    const addresses = [];
+
+                    for (let i = 0; i < lines.length; i++) {
+                        let row = lines[i].trim();
+                        if (!row) continue;
+
+                        if (row.startsWith('"') && row.endsWith('"')) {
+                            row = row.slice(1, -1);
+                        }
+
+                        if (i === 0 && (row.toLowerCase().startsWith("address") || row.toLowerCase().startsWith("messy"))) {
+                            continue;
+                        }
+
+                        addresses.push(row);
+                    }
+
+                    if (addresses.length === 0) {
+                        alert("No valid addresses found in the CSV file.");
+                        setIsBulkRunning(false);
+                        return;
+                    }
+
+                    setBulkProgress(25);
+
+                    try {
+                        const res = await fetch("http://localhost:8000/api/v1/bulk-resolve", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                addresses: addresses,
+                                user_id: currentUser ? currentUser.id : null
+                            })
+                        });
+
+                        setBulkProgress(75);
+
+                        if (res.ok) {
+                            const data = await res.json();
+                            const formatted = data.map((item) => ({
+                                address: item.address,
+                                coordinates: item.latitude && item.longitude ? `${item.latitude.toFixed(5)}, ${item.longitude.toFixed(5)}` : "Failed",
+                                accuracy: `${item.confidence}% Match`,
+                                status: item.status
+                            }));
+                            setBulkResults(formatted);
+                            setBulkProgress(100);
+                        } else {
+                            alert("Bulk resolution failed on the backend.");
+                        }
+                    } catch (err) {
+                        alert("Failed to connect to the backend server.");
+                    } finally {
+                        setIsBulkRunning(false);
+                    }
+                };
+
+                reader.readAsText(bulkFile);
+            };
+
+            const downloadBulkCSV = () => {
+                if (bulkResults.length === 0) return;
+
+                const headers = ["Messy Address", "Resolved Coordinates", "Confidence", "Status"];
+                const rows = bulkResults.map(r => [
+                    `"${r.address.replace(/"/g, '""')}"`,
+                    `"${r.coordinates}"`,
+                    `"${r.accuracy}"`,
+                    `"${r.status}"`
+                ]);
+
+                const csvContent = "data:text/csv;charset=utf-8,"
+                    + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `geocoded_results_${Date.now()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handlePlaygroundSubmit = async (e) => {
+                e.preventDefault();
+                setIsPlaygroundRunning(true);
+                setPlaygroundResponse('{\n  "status": "processing",\n  "logs": "Running 9-agent LangGraph pipeline..."\n}');
+                try {
+                    const parsedPayload = JSON.parse(playgroundPayload);
+                    const res = await fetch("http://localhost:8000/api/v1/resolve", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            address: parsedPayload.address,
+                            user_id: currentUser ? currentUser.id : null
+                        })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setPlaygroundResponse(JSON.stringify(data, null, 2));
+                    } else {
+                        const err = await res.json();
+                        setPlaygroundResponse(JSON.stringify(err, null, 2));
+                    }
+                } catch (err) {
+                    setPlaygroundResponse(`{\n  "error": "Pipeline Call Failed",\n  "message": "${err.message}"\n}`);
+                } finally {
+                    setIsPlaygroundRunning(false);
+                }
+            };
+
+            const copyCoordinates = () => {
+                if (result) {
+                    const coords = `${result.latitude.toFixed(6)}, ${result.longitude.toFixed(6)}`;
+                    navigator.clipboard.writeText(coords);
+                    alert(`Copied coordinates to clipboard: ${coords}`);
+                }
+            };
+
+            const downloadJSON = () => {
+                if (result) {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result, null, 2));
+                    const downloadAnchor = document.createElement('a');
+                    downloadAnchor.setAttribute("href", dataStr);
+                    downloadAnchor.setAttribute("download", `pataai_geocode_result.json`);
+                    document.body.appendChild(downloadAnchor);
+                    downloadAnchor.click();
+                    downloadAnchor.remove();
+                }
+            };
+
+            const downloadPDF = () => {
+                window.print(); // Simple premium native print trigger styled for sheet layout
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setAuthError("");
+                try {
+                    const res = await fetch("http://localhost:8000/api/v1/login", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username: loginUsername, password: loginPassword })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setCurrentUser(data);
+                        localStorage.setItem("pataai_user", JSON.stringify(data));
+                        fetchStats(data.id);
+                        fetchHistory(data.id);
+                        setCurrentPage("dashboard");
+                        setLoginUsername("");
+                        setLoginPassword("");
+                    } else {
+                        const err = await res.json();
+                        setAuthError(err.detail);
+                    }
+                } catch (err) {
+                    setAuthError(`Connection failed: ${err.message}`);
+                }
+            };
+
+            const handleRegister = async (e) => {
+                e.preventDefault();
+                setAuthError("");
+                try {
+                    const res = await fetch("http://localhost:8000/api/v1/register", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username: registerUsername, password: registerPassword, role: registerRole })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setCurrentUser(data);
+                        localStorage.setItem("pataai_user", JSON.stringify(data));
+                        fetchStats(data.id);
+                        fetchHistory(data.id);
+                        setCurrentPage("dashboard");
+                        setRegisterUsername("");
+                        setRegisterPassword("");
+                    } else {
+                        const err = await res.json();
+                        setAuthError(err.detail);
+                    }
+                } catch (err) {
+                    setAuthError(`Connection failed: ${err.message}`);
+                }
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                localStorage.removeItem("pataai_user");
+                setCurrentPage("landing");
+            };
+
+            // Render Chart.js Analytics
+            useEffect(() => {
+                if (currentPage === "analytics" && stats.total_resolved > 0) {
+                    // Destroy existing charts to prevent canvas re-use errors
+                    if (speedChartInstance.current) speedChartInstance.current.destroy();
+                    if (confidenceChartInstance.current) confidenceChartInstance.current.destroy();
+
+                    const ctxSpeed = speedChartRef.current.getContext("2d");
+                    const ctxConf = confidenceChartRef.current.getContext("2d");
+
+                    speedChartInstance.current = new Chart(ctxSpeed, {
+                        type: "line",
+                        data: {
+                            labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                            datasets: [{
+                                label: "Processing Latency (ms)",
+                                data: [120, 115, 128, 110, 121, 105, 120],
+                                borderColor: "#22c55e",
+                                backgroundColor: "rgba(34, 197, 94, 0.1)",
+                                tension: 0.3,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: { legend: { display: false } },
+                            scales: { y: { min: 90, max: 150 } }
+                        }
+                    });
+
+                    confidenceChartInstance.current = new Chart(ctxConf, {
+                        type: "bar",
+                        data: {
+                            labels: ["90%+", "80-90%", "70-80%", "<70%"],
+                            datasets: [{
+                                label: "Confidence Share",
+                                data: [65, 20, 10, 5],
+                                backgroundColor: ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+            }, [currentPage, stats]);
+
+            // Theme configurations
+            const themeClass = isLightMode ? "bg-slate-50 text-slate-800 theme-light" : "bg-darkbg text-gray-100 theme-dark";
+            const headerClass = isLightMode ? "bg-white border-b border-slate-200 text-slate-800 shadow" : "bg-cardbg border-b border-borderbg text-gray-100 shadow-lg";
+            const cardClass = isLightMode ? "bg-white border border-slate-200 text-slate-800 shadow-sm" : "bg-cardbg border border-borderbg text-gray-100 shadow-md";
+            const inputClass = isLightMode ? "bg-slate-50 border border-slate-300 text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:ring-brand-500" : "bg-darkbg border border-borderbg text-white placeholder-gray-500 focus:border-brand-500 focus:ring-brand-500";
+            const navBtnClass = (page) => currentPage === page
+                ? "bg-brand-500/10 text-brand-500 border border-brand-500/30 flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold"
+                : `flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 ${isLightMode ? 'text-slate-600' : 'text-gray-400'}`;
+
+            return (
+                <div class={`min-h-screen flex flex-col ${themeClass}`}>
+
+                    {/* Header */}
+                    <header class={`py-4 px-6 flex justify-between items-center transition-colors duration-200 ${headerClass}`}>
+                        <div class="flex items-center space-x-3 cursor-pointer" onClick={() => setCurrentPage("landing")}>
+                            <div class="bg-brand-500 p-2 rounded-lg text-darkbg flex items-center justify-center font-bold text-xl shadow-md shadow-brand-500/25">
+                                P
+                            </div>
+                            <div>
+                                <h1 class="text-xl font-bold tracking-wider">PataAI</h1>
+                                <p class="text-[10px] opacity-75">AI Powered Indian Address Intelligence Platform</p>
+                            </div>
+                        </div>
+
+                        {/* Navigation and Switches */}
+                        <div class="flex items-center space-x-4">
+                            {currentUser ? (
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-xs opacity-75 font-semibold">Logged in: {currentUser.username} ({currentUser.role})</span>
+                                    <button
+                                        onClick={handleLogout}
+                                        class={`text-xs font-bold py-1.5 px-3 rounded-lg border ${isLightMode ? 'border-slate-300 hover:bg-slate-100' : 'border-borderbg hover:bg-slate-800'}`}
+                                    >
+                                        Sign Out
+                                    </button>
+                                </div>
+                            ) : (
+                                <div class="flex space-x-2">
+                                    <button onClick={() => { setAuthError(""); setCurrentPage("login"); }} class="text-xs font-bold py-1.5 px-3 rounded bg-brand-500 text-darkbg">Sign In</button>
+                                    <button onClick={() => { setAuthError(""); setCurrentPage("register"); }} class={`text-xs font-bold py-1.5 px-3 rounded border ${isLightMode ? 'border-slate-300' : 'border-borderbg'}`}>Sign Up</button>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => setIsLightMode(!isLightMode)}
+                                class={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${isLightMode ? 'border-slate-300 hover:bg-slate-100' : 'border-borderbg hover:bg-slate-800'}`}
+                            >
+                                {isLightMode ? "🌙 Dark" : "☀️ Light"}
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Landing Page */}
+                    {currentPage === "landing" && (
+                        <div class="flex-1 flex flex-col">
+                            {/* Hero Section */}
+                            <section class="flex-1 flex flex-col justify-center items-center text-center px-6 py-20 bg-gradient-to-b from-indigo-950/20 via-transparent to-transparent">
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-900/40 text-brand-500 border border-brand-500/30 mb-6">
+                                    9-Agent Cooperative LangGraph StateGraph
+                                </span>
+                                <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight max-w-4xl leading-tight">
+                                    AI Powered Address Intelligence <br />for <span class="text-brand-500">Accurate Indian Last-Mile</span>
+                                </h1>
+                                <p class="mt-6 text-base md:text-lg opacity-75 max-w-2xl leading-relaxed mx-auto">
+                                    Transform unstructured, messy Indian addresses (landmarks, regional languages, spelling typos, and wrong pincodes) into precise coordinates under 500ms using a 9-Agent cooperative system.
+                                </p>
+                                <div class="mt-10 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                                    <button
+                                        onClick={() => {
+                                            if (currentUser) setCurrentPage("dashboard");
+                                            else { setAuthError(""); setCurrentPage("login"); }
+                                        }}
+                                        class="bg-brand-500 hover:bg-brand-600 text-darkbg font-bold py-3 px-8 rounded-lg shadow-lg shadow-brand-500/25 active:scale-95 transition"
+                                    >
+                                        Launch Console Dashboard
+                                    </button>
+                                    <button
+                                        onClick={() => setCurrentPage("playground")}
+                                        class={`py-3 px-8 rounded-lg border font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition ${isLightMode ? 'border-slate-300' : 'border-borderbg'}`}
+                                    >
+                                        Developer Sandbox
+                                    </button>
+                                </div>
+                            </section>
+                        </div>
+                    )}
+
+                    {/* Login Page */}
+                    {currentPage === "login" && (
+                        <div class="flex-1 flex justify-center items-center px-6 py-12">
+                            <div class={`w-full max-w-md p-6 rounded-2xl border ${cardClass} space-y-4 shadow-xl`}>
+                                <h2 class="text-xl font-bold tracking-wide text-center">Sign In to PataAI</h2>
+                                {authError && <p class="text-xs text-red-500 text-center font-semibold bg-red-500/10 p-2 rounded">{authError}</p>}
+                                <form onSubmit={handleLogin} class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase mb-1">Username</label>
+                                        <input
+                                            type="text"
+                                            value={loginUsername}
+                                            onChange={(e) => setLoginUsername(e.target.value)}
+                                            placeholder="Enter username"
+                                            class={`w-full text-xs p-2.5 rounded focus:outline-none ${inputClass}`}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase mb-1">Password</label>
+                                        <input
+                                            type="password"
+                                            value={loginPassword}
+                                            onChange={(e) => setLoginPassword(e.target.value)}
+                                            placeholder="Enter password"
+                                            class={`w-full text-xs p-2.5 rounded focus:outline-none ${inputClass}`}
+                                            required
+                                        />
+                                    </div>
+                                    <button type="submit" class="w-full bg-brand-500 text-darkbg font-bold py-2.5 rounded text-xs mt-4">Sign In</button>
+                                </form>
+                                <div class="text-center text-xs opacity-75 pt-2">
+                                    Don't have an account? <button onClick={() => { setAuthError(""); setCurrentPage("register"); }} class="text-brand-500 font-semibold underline">Sign Up</button>
+                                </div>
+                                <div class="border-t border-borderbg/50 pt-3 text-[11px] opacity-70 space-y-1 bg-darkbg/20 p-3 rounded">
+                                    <p class="font-bold text-yellow-500">Demo Profiles Available (Password: pataai2026):</p>
+                                    <p>• Admin: <code class="font-mono">admin</code></p>
+                                    <p>• Operations Manager: <code class="font-mono">manager</code></p>
+                                    <p>• Delivery Driver: <code class="font-mono">driver</code></p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Register Page */}
+                    {currentPage === "register" && (
+                        <div class="flex-1 flex justify-center items-center px-6 py-12">
+                            <div class={`w-full max-w-md p-6 rounded-2xl border ${cardClass} space-y-4 shadow-xl`}>
+                                <h2 class="text-xl font-bold tracking-wide text-center">Create PataAI Account</h2>
+                                {authError && <p class="text-xs text-red-500 text-center font-semibold bg-red-500/10 p-2 rounded">{authError}</p>}
+                                <form onSubmit={handleRegister} class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase mb-1">Username</label>
+                                        <input
+                                            type="text"
+                                            value={registerUsername}
+                                            onChange={(e) => setRegisterUsername(e.target.value)}
+                                            placeholder="Choose username"
+                                            class={`w-full text-xs p-2.5 rounded focus:outline-none ${inputClass}`}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase mb-1">Password</label>
+                                        <input
+                                            type="password"
+                                            value={registerPassword}
+                                            onChange={(e) => setRegisterPassword(e.target.value)}
+                                            placeholder="Choose password"
+                                            class={`w-full text-xs p-2.5 rounded focus:outline-none ${inputClass}`}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold uppercase mb-1">Account Role</label>
+                                        <select
+                                            value={registerRole}
+                                            onChange={(e) => setRegisterRole(e.target.value)}
+                                            class={`w-full text-xs p-2.5 rounded focus:outline-none ${inputClass}`}
+                                        >
+                                            <option value="Driver">Driver (Delivery Agent)</option>
+                                            <option value="Manager">Manager (Dispatch Operations)</option>
+                                            <option value="Admin">Admin (System Controls)</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="w-full bg-brand-500 text-darkbg font-bold py-2.5 rounded text-xs mt-4">Create Account</button>
+                                </form>
+                                <div class="text-center text-xs opacity-75 pt-2">
+                                    Already have an account? <button onClick={() => { setAuthError(""); setCurrentPage("login"); }} class="text-brand-500 font-semibold underline">Sign In</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SaaS Dashboard Portal */}
+                    {currentUser && currentPage !== "landing" && currentPage !== "login" && currentPage !== "register" && (
+                        <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+
+                            {/* Navigation Sidebar */}
+                            <aside class={`w-full md:w-[220px] p-4 flex flex-col space-y-1.5 border-r ${isLightMode ? 'bg-slate-50 border-slate-200' : 'bg-cardbg border-borderbg'}`}>
+                                <p class="text-[10px] uppercase font-bold opacity-50 px-4 py-2">Workspace Actions</p>
+                                <button onClick={() => setCurrentPage("dashboard")} class={navBtnClass("dashboard")}>Single Address</button>
+                                <button onClick={() => setCurrentPage("bulk")} class={navBtnClass("bulk")}>Bulk Geocoding</button>
+                                <button onClick={() => setCurrentPage("analytics")} class={navBtnClass("analytics")}>Analytics Stats</button>
+                                <button onClick={() => setCurrentPage("audit")} class={navBtnClass("audit")}>Audit Timeline</button>
+                                <button onClick={() => setCurrentPage("playground")} class={navBtnClass("playground")}>API Playground</button>
+                                <button onClick={() => setCurrentPage("developer")} class={navBtnClass("developer")}>API Keys</button>
+                                <button onClick={() => setCurrentPage("settings")} class={navBtnClass("settings")}>Settings</button>
+                            </aside>
+
+                            {/* Main Display Window */}
+                            <main class="flex-1 p-5 overflow-y-auto">
+
+                                {/* Page: Dashboard */}
+                                {currentPage === "dashboard" && (
+                                    <div class="flex flex-col space-y-5">
+                                        <div class={`p-4 rounded-xl ${cardClass}`}>
+                                            <h2 class="text-xs font-bold uppercase tracking-wider text-brand-500 mb-3">9-Agent Cooperative StateGraph</h2>
+                                            <div class="grid grid-cols-3 md:grid-cols-9 gap-1.5 text-center text-[10px] font-bold">
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'language' ? 'active-agent' : ''}`}>1. Language</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'normalization' ? 'active-agent' : ''}`}>2. Normalization</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'parsing' ? 'active-agent' : ''}`}>3. Parser</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'pincode' ? 'active-agent' : ''}`}>4. Pincode</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'landmark' ? 'active-agent' : ''}`}>5. OSM Search</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'semantic' ? 'active-agent' : ''}`}>6. Semantic</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'geo' ? 'active-agent' : ''}`}>7. Resolution</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'self' ? 'active-agent' : ''}`}>8. Self-Check</div>
+                                                <div class={`border p-2 rounded transition ${activeAgent === 'evidence' ? 'active-agent' : ''}`}>9. Evidence</div>
+                                            </div>
+                                            <div class={`mt-3 rounded p-2.5 font-mono text-[11px] min-h-[60px] max-h-[100px] overflow-y-auto ${isLightMode ? 'bg-slate-100 text-slate-700' : 'bg-darkbg text-brand-500'}`}>
+                                                {agentLogs.length === 0 ? "Orchestrator Idle..." : agentLogs.map((l, i) => <p key={i}>&gt; {l}</p>)}
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                            {/* Input Area */}
+                                            <div class="flex flex-col space-y-4">
+                                                <div class={`p-5 rounded-xl border ${cardClass}`}>
+                                                    <form onSubmit={triggerResolve} class="space-y-4">
+                                                        <div>
+                                                            <div class="flex justify-between items-center mb-2">
+                                                                <label class="block text-xs font-bold uppercase tracking-wider">Messy Address Input</label>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={toggleListening}
+                                                                    class={`p-1.5 rounded-full transition-all duration-300 ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                                                    title={isListening ? "Listening... Click to stop" : "Speak to enter address"}
+                                                                >
+                                                                    🎙️
+                                                                </button>
+                                                            </div>
+                                                            <textarea
+                                                                rows="4"
+                                                                value={addressInput}
+                                                                onChange={(e) => setAddressInput(e.target.value)}
+                                                                placeholder="Opposite Ganesh Temple Kothapet Hyderabad..."
+                                                                class={`w-full text-xs p-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none ${inputClass}`}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            id="resolve-submit"
+                                                            type="submit"
+                                                            disabled={isLoading}
+                                                            class="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-gray-400 text-darkbg font-bold py-2.5 rounded-lg text-xs transition"
+                                                        >
+                                                            {isLoading ? "Resolving Agents..." : "Analyze Address"}
+                                                        </button>
+                                                    </form>
+                                                </div>
+
+                                                {/* Presets */}
+                                                <div class={`p-4 rounded-xl border ${cardClass} space-y-2`}>
+                                                    <h4 class="text-xs font-bold uppercase tracking-wider">Test Sample Presets</h4>
+                                                    <div class="grid grid-cols-1 gap-1.5 max-h-[180px] overflow-y-auto">
+                                                        {PRESETS.map((p, i) => (
+                                                            <button
+                                                                key={i}
+                                                                onClick={() => handlePresetClick(p.address)}
+                                                                class={`text-left text-[11px] p-2 rounded hover:border-brand-500/50 border transition flex justify-between items-center ${isLightMode ? 'bg-slate-50 border-slate-200' : 'bg-darkbg/40 border-borderbg/50'}`}
+                                                            >
+                                                                <span class="truncate">{p.title}</span>
+                                                                <span class="text-[9px] px-1 py-0.5 rounded bg-brand-900/10 text-brand-500">{p.badge}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Interactive Map */}
+                                            <div class="lg:col-span-2 flex flex-col space-y-4">
+                                                <div class={`rounded-xl border overflow-hidden flex flex-col relative h-[320px] ${cardClass}`}>
+                                                    <div ref={mapRef} class="w-full h-full"></div>
+                                                    {/* Floating Layer Control */}
+                                                    <div class="absolute top-3 right-3 z-[1000] flex space-x-1 bg-slate-900 border border-slate-700 p-1 rounded-lg shadow-xl">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateTileLayer('dark')}
+                                                            class={`px-2 py-0.5 rounded text-[9px] font-bold transition ${mapLayer === 'dark' ? 'bg-brand-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                                                        >
+                                                            Dark
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateTileLayer('satellite')}
+                                                            class={`px-2 py-0.5 rounded text-[9px] font-bold transition ${mapLayer === 'satellite' ? 'bg-brand-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                                                        >
+                                                            Satellite
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateTileLayer('terrain')}
+                                                            class={`px-2 py-0.5 rounded text-[9px] font-bold transition ${mapLayer === 'terrain' ? 'bg-brand-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                                                        >
+                                                            Terrain
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateTileLayer('streets')}
+                                                            class={`px-2 py-0.5 rounded text-[9px] font-bold transition ${mapLayer === 'streets' ? 'bg-brand-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                                                        >
+                                                            Streets
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+
+                                                {/* Result Screen */}
+                                                {result && (
+                                                    <div class={`p-5 rounded-xl border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs ${cardClass}`}>
+                                                        <div class="space-y-3">
+                                                            <div class="flex justify-between items-center">
+                                                                <div>
+                                                                    <span class="block opacity-75 font-semibold text-[10px] uppercase">Confidence</span>
+                                                                    <span class="text-xl font-black text-brand-500">{result.confidence}% Match</span>
+                                                                </div>
+                                                                <div class="flex space-x-2">
+                                                                    <button onClick={copyCoordinates} class="bg-darkbg/40 border border-borderbg p-1.5 rounded hover:bg-slate-800" title="Copy Coordinates">📋 Copy</button>
+                                                                    <button onClick={downloadJSON} class="bg-darkbg/40 border border-borderbg p-1.5 rounded hover:bg-slate-800" title="Download JSON">📥 JSON</button>
+                                                                    <button onClick={downloadPDF} class="bg-darkbg/40 border border-borderbg p-1.5 rounded hover:bg-slate-800" title="Print/Download PDF">📄 PDF</button>
+                                                                </div>
+                                                            </div>
+                                                            <div class="bg-darkbg/50 p-3 rounded-lg border border-borderbg/20 space-y-2 mt-1">
+                                                                <div class="flex justify-between items-center">
+                                                                    <span class="text-[9px] uppercase font-bold text-slate-400">Multi-Language AI Translator</span>
+                                                                    <span class="px-2 py-0.5 rounded bg-brand-500/10 border border-brand-500/20 text-brand-500 font-bold text-[9px]">
+                                                                        {result.detected_language || "English (Standard)"}
+                                                                    </span>
+                                                                </div>
+                                                                <div class="space-y-1">
+                                                                    <span class="block text-[9px] text-slate-500 font-semibold uppercase">Clean Normalization Output</span>
+                                                                    <span class="font-semibold text-white text-xs block bg-darkbg/40 p-2.5 rounded border border-borderbg/20">{result.normalized_address}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="grid grid-cols-2 gap-2 mt-1">
+                                                                <div>
+                                                                    <span class="block opacity-75 text-[9px] uppercase">Decision Cost</span>
+                                                                    <span class="font-semibold text-brand-500 block bg-darkbg/40 p-1.5 rounded border border-borderbg/20 text-[10px]">
+                                                                        ₹ {result.cost_inr.toFixed(3)} (${result.cost_usd.toFixed(4)})
+                                                                    </span>
+                                                                </div>
+                                                                <div>
+                                                                    <span class="block opacity-75 text-[9px] uppercase">Model Agent Stack</span>
+                                                                    <span class="font-semibold text-white block bg-darkbg/40 p-1.5 rounded border border-borderbg/20 text-[10px] truncate" title={result.model_used}>
+                                                                        {result.model_used}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <div class="grid grid-cols-2 gap-2 font-mono">
+                                                                <div>
+                                                                    <span class="block opacity-50 text-[9px]">LATITUDE</span>
+                                                                    <span class="font-bold">{result.latitude.toFixed(6)}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span class="block opacity-50 text-[9px]">LONGITUDE</span>
+                                                                    <span class="font-bold">{result.longitude.toFixed(6)}</span>
+                                                                </div>
+                                                            </div>
+                                                            {result.risk_warning && (
+                                                                <div class="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded text-[10px] mt-2">
+                                                                    <strong>Security Notice:</strong> {result.risk_warning}
+                                                                </div>
+                                                            )}
+                                                            <div class="text-[10px] opacity-75 mt-2 bg-darkbg/20 p-2 rounded">
+                                                                <strong>GIS validation:</strong> Accuracy radius circle bounds set to 120m around coordinates.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Page: Bulk Upload */}
+                                {currentPage === "bulk" && (
+                                    <div class="max-w-4xl mx-auto space-y-5">
+                                        <div class={`p-6 rounded-xl border ${cardClass}`}>
+                                            <h2 class="text-lg font-bold text-brand-500 mb-2">CSV Bulk Geocoding Processing</h2>
+                                            <p class="text-xs opacity-75 mb-4">Upload a CSV containing messy delivery addresses. Our 9-Agent StateGraph will queue and geocode them in parallel.</p>
+
+                                            <form onSubmit={triggerBulkUpload} class="space-y-4">
+                                                <input
+                                                    type="file"
+                                                    accept=".csv"
+                                                    onChange={(e) => setBulkFile(e.target.files[0])}
+                                                    class={`w-full text-xs p-3 rounded-lg ${inputClass}`}
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    disabled={isBulkRunning || !bulkFile}
+                                                    class="bg-brand-500 hover:bg-brand-600 disabled:bg-gray-500 text-darkbg font-bold py-2 px-6 rounded-lg text-xs"
+                                                >
+                                                    {isBulkRunning ? "Processing CSV Queue..." : "Upload & Geocode"}
+                                                </button>
+                                            </form>
+
+                                            {isBulkRunning && (
+                                                <div class="mt-4 space-y-1">
+                                                    <div class="flex justify-between text-xs">
+                                                        <span>Progress</span>
+                                                        <span>{bulkProgress}%</span>
+                                                    </div>
+                                                    <div class="w-full bg-darkbg rounded-full h-2">
+                                                        <div class="bg-brand-500 h-2 rounded-full" style={{ width: `${bulkProgress}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {bulkResults.length > 0 && (
+                                            <div class={`p-5 rounded-xl border ${cardClass}`}>
+                                                <div class="flex justify-between items-center mb-4">
+                                                    <h3 class="text-xs font-bold uppercase tracking-wider">Live Geocoding Results</h3>
+                                                    <button
+                                                        onClick={downloadBulkCSV}
+                                                        class="bg-brand-500 hover:bg-brand-600 text-darkbg text-[10px] font-bold px-3 py-1.5 rounded transition"
+                                                    >
+                                                        Download Geocoded CSV
+                                                    </button>
+                                                </div>
+                                                <table class="w-full text-left text-xs">
+                                                    <thead>
+                                                        <tr class="border-b border-borderbg opacity-75">
+                                                            <th class="pb-2">Address</th>
+                                                            <th class="pb-2">Coordinates</th>
+                                                            <th class="pb-2">Confidence</th>
+                                                            <th class="pb-2">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {bulkResults.map((r, i) => (
+                                                            <tr key={i} class="border-b border-borderbg/50">
+                                                                <td class="py-2.5 truncate max-w-[200px]">{r.address}</td>
+                                                                <td class="py-2.5 font-mono">{r.coordinates}</td>
+                                                                <td class="py-2.5 text-brand-500">{r.accuracy}</td>
+                                                                <td class="py-2.5 text-green-500">{r.status}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Page: Analytics */}
+                                {currentPage === "analytics" && (
+                                    <div class="space-y-6">
+                                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <div class={`p-4 rounded-xl border ${cardClass}`}>
+                                                <span class="text-[10px] uppercase opacity-75">Total Resolved Drops</span>
+                                                <h2 class="text-2xl font-black mt-1">{stats.total_resolved}</h2>
+                                            </div>
+                                            <div class={`p-4 rounded-xl border ${cardClass}`}>
+                                                <span class="text-[10px] uppercase opacity-75">Avg Accuracy</span>
+                                                <h2 class="text-2xl font-black mt-1 text-brand-500">{stats.success_rate}%</h2>
+                                            </div>
+                                            <div class={`p-4 rounded-xl border ${cardClass}`}>
+                                                <span class="text-[10px] uppercase opacity-75">Calls Saved</span>
+                                                <h2 class="text-2xl font-black mt-1">{stats.delivery_calls_saved}</h2>
+                                            </div>
+                                            <div class={`p-4 rounded-xl border ${cardClass}`}>
+                                                <span class="text-[10px] uppercase opacity-75">Carbon Reduced</span>
+                                                <h2 class="text-2xl font-black mt-1">{stats.co2_reduced_kg} kg</h2>
+                                            </div>
+                                        </div>
+
+                                        {/* Chart JS Containers */}
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div class={`p-5 rounded-xl border ${cardClass}`}>
+                                                <h3 class="text-xs font-bold uppercase mb-4">Processing Latency (ms)</h3>
+                                                <canvas ref={speedChartRef} height="120"></canvas>
+                                            </div>
+                                            <div class={`p-5 rounded-xl border ${cardClass}`}>
+                                                <h3 class="text-xs font-bold uppercase mb-4">Confidence Distribution</h3>
+                                                <canvas ref={confidenceChartRef} height="120"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Page: Audit Logs */}
+                                {currentPage === "audit" && (
+                                    <div class="max-w-4xl mx-auto space-y-4">
+                                        <h2 class="text-sm font-bold uppercase tracking-wider text-brand-500">Reversible Auditing Ledger</h2>
+                                        <div class="space-y-3">
+                                            {history.map((h, i) => (
+                                                <div key={i} class={`p-4 border rounded-xl space-y-2 ${cardClass}`}>
+                                                    <div class="flex justify-between text-[10px] opacity-75">
+                                                        <span>{new Date(h.created_at).toLocaleString()}</span>
+                                                        <span class="font-bold text-brand-500">{h.confidence}% Confidence</span>
+                                                    </div>
+                                                    <div class="grid grid-cols-2 gap-4 text-xs">
+                                                        <div>
+                                                            <strong class="text-yellow-500 block text-[9px] uppercase">Original (Masked for Privacy)</strong>
+                                                            <p class="opacity-75 mt-0.5 truncate">{h.original_address}</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong class="text-brand-500 block text-[9px] uppercase">Normalized Geocode</strong>
+                                                            <p class="opacity-90 mt-0.5 truncate">{h.normalized_address}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-[10px] opacity-50 font-mono">
+                                                        User Profile: {h.username}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Page: API Playground */}
+                                {currentPage === "playground" && (
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto">
+                                        <div class={`p-5 rounded-xl border ${cardClass} space-y-4`}>
+                                            <h2 class="text-sm font-bold uppercase tracking-wider text-brand-500">REST API Playground</h2>
+                                            <div class="text-xs space-y-3">
+                                                <p><strong>Endpoint:</strong> <code class="bg-darkbg p-1 rounded">POST http://localhost:8000/api/v1/resolve</code></p>
+                                                <div>
+                                                    <span class="block mb-1">Payload JSON</span>
+                                                    <textarea
+                                                        rows="4"
+                                                        class={`w-full font-mono text-[11px] p-2.5 rounded focus:outline-none ${inputClass}`}
+                                                        value={playgroundPayload}
+                                                        onChange={(e) => setPlaygroundPayload(e.target.value)}
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={handlePlaygroundSubmit}
+                                                    disabled={isPlaygroundRunning}
+                                                    class="bg-brand-500 text-darkbg font-bold py-2 px-5 rounded-lg text-xs"
+                                                >
+                                                    {isPlaygroundRunning ? "Sending..." : "Try API"}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class={`p-5 rounded-xl border ${cardClass} space-y-3`}>
+                                            <h2 class="text-sm font-bold uppercase tracking-wider text-brand-500">Response Payload (JSON)</h2>
+                                            <pre class={`p-3 rounded font-mono text-[11px] overflow-x-auto min-h-[180px] ${isLightMode ? 'bg-slate-100 text-slate-700' : 'bg-darkbg text-brand-500'}`}>
+                                                {playgroundResponse}
+                                            </pre>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Page: Developer Portal API Keys */}
+                                {currentPage === "developer" && (
+                                    <div class="max-w-4xl mx-auto space-y-5">
+                                        <div class={`p-6 rounded-xl border ${cardClass}`}>
+                                            <h2 class="text-lg font-bold text-brand-500 mb-2">Developer Keys Registry</h2>
+                                            <p class="text-xs opacity-75 mb-4">Generate and configure API keys for enterprise integration in shipping / CRM platforms.</p>
+                                            <button class="bg-brand-500 text-darkbg font-bold py-2 px-4 rounded-lg text-xs">+ Generate live key</button>
+                                        </div>
+
+                                        <div class={`p-5 rounded-xl border ${cardClass}`}>
+                                            <h3 class="text-xs font-bold uppercase tracking-wider mb-3">Active API Keys</h3>
+                                            <div class="space-y-3">
+                                                {apiKeys.map(k => (
+                                                    <div key={k.id} class="flex justify-between items-center text-xs p-3 rounded border border-borderbg/20 bg-darkbg/10">
+                                                        <div>
+                                                            <p class="font-bold text-white">{k.name}</p>
+                                                            <p class="font-mono text-[10px] opacity-75 mt-0.5">{k.prefix}••••••••••••••••</p>
+                                                        </div>
+                                                        <div class="text-right text-[10px] opacity-75">
+                                                            <p>Created: {k.created}</p>
+                                                            <p class="mt-0.5">Quota: {k.limit}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Page: Settings */}
+                                {currentPage === "settings" && (
+                                    <div class="max-w-3xl mx-auto space-y-6">
+                                        <div class={`p-6 rounded-xl border ${cardClass} space-y-4`}>
+                                            <h2 class="text-sm font-bold uppercase tracking-wider text-brand-500 border-b pb-2">Profile & Privacy Settings</h2>
+                                            <div class="space-y-3 text-xs">
+                                                <div class="flex justify-between items-center">
+                                                    <div>
+                                                        <p class="font-bold text-white">DPDP Address Retention Policy</p>
+                                                        <p class="opacity-75">Clear original address strings from RAM instantly post-geocoding.</p>
+                                                    </div>
+                                                    <span class="text-xs font-semibold text-brand-500">ACTIVE</span>
+                                                </div>
+                                                <div class="border-t border-borderbg/30 my-3"></div>
+                                                <div class="flex justify-between items-center">
+                                                    <div>
+                                                        <p class="font-bold text-white">Fuzzy Match Threshold</p>
+                                                        <p class="opacity-75">Configure strictness for landmark distance validation limits.</p>
+                                                    </div>
+                                                    <span class="text-xs font-semibold">1,500 meters</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </main>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

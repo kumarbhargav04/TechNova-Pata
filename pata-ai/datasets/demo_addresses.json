@@ -1,0 +1,402 @@
+[
+  {
+    "id": 1,
+    "address": "Opposite Ganesh Temple Kothapet Hyderabad",
+    "description": "Landmark with locality and city",
+    "expected_pincode": "500035",
+    "expected_city": "Hyderabad",
+    "category": "Standard Hinglish Landmark"
+  },
+  {
+    "id": 2,
+    "address": "Hanuman mandir daggara Ram Nagar Hyderabad",
+    "description": "Telugu transliteration 'daggara' (near)",
+    "expected_pincode": "500020",
+    "expected_city": "Hyderabad",
+    "category": "Telugu Transliteration"
+  },
+  {
+    "id": 3,
+    "address": "హనుమాన్ గుడి దగ్గర, కొత్తపేట, హైదరాబాద్",
+    "description": "Pure Telugu regional script address",
+    "expected_pincode": "500035",
+    "expected_city": "Hyderabad",
+    "category": "Telugu Script"
+  },
+  {
+    "id": 4,
+    "address": "Near water tank behind medical shop Kothapet 500035",
+    "description": "Informal landmarks and correct pincode",
+    "expected_pincode": "500035",
+    "expected_city": "Hyderabad",
+    "category": "Informal Landmark"
+  },
+  {
+    "id": 5,
+    "address": "राम मंदिर के पास पुरानी कॉलोनी, दिल्ली",
+    "description": "Pure Hindi regional script",
+    "expected_pincode": "110006",
+    "expected_city": "Delhi",
+    "category": "Hindi Script"
+  },
+  {
+    "id": 6,
+    "address": "Ganesh templ Kothapeta Hyderbad 500038",
+    "description": "Multiple typos in landmark, locality, city and wrong pincode",
+    "expected_pincode": "500035",
+    "expected_city": "Hyderabad",
+    "category": "Spelling Typos & Wrong Pincode"
+  },
+  {
+    "id": 7,
+    "address": "Behind Metro Station, Pillar No 120, Ameerpet, Hyderabad",
+    "description": "Metro pillar number as landmark",
+    "expected_pincode": "500016",
+    "expected_city": "Hyderabad",
+    "category": "Infrastructure Landmark"
+  },
+  {
+    "id": 8,
+    "address": "Flat 302, Sai Residency, opposite post office, Whitefield, Bangalore",
+    "description": "Apartment name with post office landmark in Bangalore",
+    "expected_pincode": "560066",
+    "expected_city": "Bengaluru",
+    "category": "Apartment & Landmark"
+  },
+  {
+    "id": 9,
+    "address": "Shiva temple ke peeche, Sector 62, Noida",
+    "description": "Hinglish 'ke peeche' (behind)",
+    "expected_pincode": "201301",
+    "expected_city": "Noida",
+    "category": "Hinglish Translation"
+  },
+  {
+    "id": 10,
+    "address": "D-Block market opposite SBI Bank, Saket, New Delhi 110017",
+    "description": "Bank landmark in South Delhi",
+    "expected_pincode": "110017",
+    "expected_city": "Delhi",
+    "category": "Commercial Landmark"
+  },
+  {
+    "id": 11,
+    "address": "Near Government High School, Gachibowli, Hyderabad, 500032",
+    "description": "School landmark",
+    "expected_pincode": "500032",
+    "expected_city": "Hyderabad",
+    "category": "Educational Landmark"
+  },
+  {
+    "id": 12,
+    "address": "Apollo hospital daggara, Jubilee Hills, Hyderabad",
+    "description": "Hospital landmark with Telugu word",
+    "expected_pincode": "500033",
+    "expected_city": "Hyderabad",
+    "category": "Hospital Landmark"
+  },
+  {
+    "id": 13,
+    "address": "Beside Dominos Pizza, Linking Road, Bandra West, Mumbai 400050",
+    "description": "Food outlet landmark in Mumbai",
+    "expected_pincode": "400050",
+    "expected_city": "Mumbai",
+    "category": "Commercial Landmark"
+  },
+  {
+    "id": 14,
+    "address": "Chhatrapati Shivaji Terminus opposite side, Fort, Mumbai",
+    "description": "Major landmark in historical district",
+    "expected_pincode": "400001",
+    "expected_city": "Mumbai",
+    "category": "Major Transit Landmark"
+  },
+  {
+    "id": 15,
+    "address": "Kali Bari mandir ke paas, CR Park, New Delhi",
+    "description": "Bengali/Hindi community area with temple landmark",
+    "expected_pincode": "110019",
+    "expected_city": "Delhi",
+    "category": "Cultural Landmark"
+  },
+  {
+    "id": 16,
+    "address": "Secunderabad Station, platform 1 side, Secunderabad, 500003",
+    "description": "Railway station platform reference",
+    "expected_pincode": "500003",
+    "expected_city": "Hyderabad",
+    "category": "Transit Landmark"
+  },
+  {
+    "id": 17,
+    "address": "Neta ji subhash complex near post office, Sector 15, Rohini, Delhi",
+    "description": "Complex name with minor landmark",
+    "expected_pincode": "110085",
+    "expected_city": "Delhi",
+    "category": "Complex & Landmark"
+  },
+  {
+    "id": 18,
+    "address": "Gachibowli flyover daggara, DLF Gate 3, Gachibowli, Hyderabad",
+    "description": "Tech park gate reference",
+    "expected_pincode": "500032",
+    "expected_city": "Hyderabad",
+    "category": "IT Park Landmark"
+  },
+  {
+    "id": 19,
+    "address": "Opposite Inorbit Mall, Madhapur, Hyderabad, 500081",
+    "description": "Well known mall landmark",
+    "expected_pincode": "500081",
+    "expected_city": "Hyderabad",
+    "category": "Mall Landmark"
+  },
+  {
+    "id": 20,
+    "address": "Near Bilal Masjid, Mehdipatnam, Hyderabad",
+    "description": "Religious landmark in Hyderabad",
+    "expected_pincode": "500028",
+    "expected_city": "Hyderabad",
+    "category": "Religious Landmark"
+  },
+  {
+    "id": 21,
+    "address": "Ram mandir k paas, Indiranagar, Bangalore",
+    "description": "Abbreviated Hinglish 'k paas'",
+    "expected_pincode": "560038",
+    "expected_city": "Bengaluru",
+    "category": "Hinglish Abbreviation"
+  },
+  {
+    "id": 22,
+    "address": "Behind Forum Mall, Koramangala 7th block, Bangalore",
+    "description": "Mall and block sub-locality",
+    "expected_pincode": "560095",
+    "expected_city": "Bengaluru",
+    "category": "Sub-locality & Mall"
+  },
+  {
+    "id": 23,
+    "address": "Opposite Gurudwara, G.T. Road, Amritsar, Punjab 143001",
+    "description": "Religious place on highway in North India",
+    "expected_pincode": "143001",
+    "expected_city": "Amritsar",
+    "category": "Religious Landmark"
+  },
+  {
+    "id": 24,
+    "address": "Near Jama Masjid, Old Delhi, 110006",
+    "description": "Historical landmark in Old Delhi",
+    "expected_pincode": "110006",
+    "expected_city": "Delhi",
+    "category": "Historical Landmark"
+  },
+  {
+    "id": 25,
+    "address": "Opp green park metro station, Green Park, New Delhi",
+    "description": "Metro station abbreviation",
+    "expected_pincode": "110016",
+    "expected_city": "Delhi",
+    "category": "Transit Landmark"
+  },
+  {
+    "id": 26,
+    "address": "Hitech city MMTS station daggara, Hitec City, Hyderabad",
+    "description": "Local transit system reference (MMTS)",
+    "expected_pincode": "500081",
+    "expected_city": "Hyderabad",
+    "category": "Transit Landmark"
+  },
+  {
+    "id": 27,
+    "address": "Near passport office, Kothi, Hyderabad",
+    "description": "Government office landmark",
+    "expected_pincode": "500095",
+    "expected_city": "Hyderabad",
+    "category": "Govt Office Landmark"
+  },
+  {
+    "id": 28,
+    "address": "Opposite Osmania University PG College, Secunderabad",
+    "description": "College campus landmark",
+    "expected_pincode": "500003",
+    "expected_city": "Hyderabad",
+    "category": "Educational Landmark"
+  },
+  {
+    "id": 29,
+    "address": "Taj Mahal Hotel side, Abids, Hyderabad, 500001",
+    "description": "Famous local hotel/restaurant landmark",
+    "expected_pincode": "500001",
+    "expected_city": "Hyderabad",
+    "category": "Hotel Landmark"
+  },
+  {
+    "id": 30,
+    "address": "Near Charminar, Laad Bazar, Hyderabad",
+    "description": "Highly congested monument location",
+    "expected_pincode": "500002",
+    "expected_city": "Hyderabad",
+    "category": "Monument Landmark"
+  },
+  {
+    "id": 31,
+    "address": "Opposite Salar Jung Museum, Darulshifa, Hyderabad",
+    "description": "Museum landmark",
+    "expected_pincode": "500024",
+    "expected_city": "Hyderabad",
+    "category": "Museum Landmark"
+  },
+  {
+    "id": 32,
+    "address": "Near Birla Mandir, Khairatabad, Hyderabad",
+    "description": "Temple landmark on hillock",
+    "expected_pincode": "500004",
+    "expected_city": "Hyderabad",
+    "category": "Religious Landmark"
+  },
+  {
+    "id": 33,
+    "address": "Near assembly metro pillar 45, Saifabad, Hyderabad",
+    "description": "Assembly building and metro combination",
+    "expected_pincode": "500004",
+    "expected_city": "Hyderabad",
+    "category": "Infrastructure Landmark"
+  },
+  {
+    "id": 34,
+    "address": "Opposite Prasad IMAX, NTR Gardens, Hyderabad",
+    "description": "Theater landmark near park",
+    "expected_pincode": "500063",
+    "expected_city": "Hyderabad",
+    "category": "Commercial Landmark"
+  },
+  {
+    "id": 35,
+    "address": "NIMS hospital back gate, Punjagutta, Hyderabad",
+    "description": "Back gate of a hospital",
+    "expected_pincode": "500082",
+    "expected_city": "Hyderabad",
+    "category": "Hospital Gate Landmark"
+  },
+  {
+    "id": 36,
+    "address": "Opposite Hyderabad Central Mall, Punjagutta, Hyderabad",
+    "description": "Shopping mall landmark",
+    "expected_pincode": "500082",
+    "expected_city": "Hyderabad",
+    "category": "Mall Landmark"
+  },
+  {
+    "id": 37,
+    "address": "Sanjeevaiah Park opposite side, Neckless Road, Secunderabad",
+    "description": "Park landmark with misspelled 'Neckless' (Necklace) Road",
+    "expected_pincode": "500003",
+    "expected_city": "Hyderabad",
+    "category": "Park Landmark"
+  },
+  {
+    "id": 38,
+    "address": "Kukatpally BJP office opposite, Kukatpally, Hyderabad",
+    "description": "Political office landmark",
+    "expected_pincode": "500072",
+    "expected_city": "Hyderabad",
+    "category": "Political Office Landmark"
+  },
+  {
+    "id": 39,
+    "address": "JNTU college main gate opposite, Kukatpally, Hyderabad",
+    "description": "University gate landmark",
+    "expected_pincode": "500085",
+    "expected_city": "Hyderabad",
+    "category": "University Gate Landmark"
+  },
+  {
+    "id": 40,
+    "address": "Forum Sujana Mall near, Kukatpally, Hyderabad",
+    "description": "Mall landmark in Kukatpally",
+    "expected_pincode": "500072",
+    "expected_city": "Hyderabad",
+    "category": "Mall Landmark"
+  },
+  {
+    "id": 41,
+    "address": "Cyber Towers back gate, Madhapur, Hyderabad",
+    "description": "Major IT landmark gate",
+    "expected_pincode": "500081",
+    "expected_city": "Hyderabad",
+    "category": "IT landmark"
+  },
+  {
+    "id": 42,
+    "address": "Beside Shilparamam, Hitec city road, Madhapur, Hyderabad",
+    "description": "Arts and crafts village landmark",
+    "expected_pincode": "500081",
+    "expected_city": "Hyderabad",
+    "category": "Cultural Landmark"
+  },
+  {
+    "id": 43,
+    "address": "Near Madhapur Police Station, Madhapur, Hyderabad",
+    "description": "Police station landmark",
+    "expected_pincode": "500081",
+    "expected_city": "Hyderabad",
+    "category": "Civic Landmark"
+  },
+  {
+    "id": 44,
+    "address": "Durgam Cheruvu cable bridge start point, Jubilee Hills, Hyderabad",
+    "description": "Infrastructure asset bridge entrance",
+    "expected_pincode": "500033",
+    "expected_city": "Hyderabad",
+    "category": "Infrastructure Landmark"
+  },
+  {
+    "id": 45,
+    "address": "Near KBR Park, Jubilee Hills Checkpost, Hyderabad",
+    "description": "Checkpost and park reference",
+    "expected_pincode": "500033",
+    "expected_city": "Hyderabad",
+    "category": "Park & Intersection"
+  },
+  {
+    "id": 46,
+    "address": "Opposite Peddamma Temple, Jubilee Hills, Hyderabad",
+    "description": "Popular local temple",
+    "expected_pincode": "500033",
+    "expected_city": "Hyderabad",
+    "category": "Religious Landmark"
+  },
+  {
+    "id": 47,
+    "address": "Beside Film Nagar Club, Film Nagar, Hyderabad",
+    "description": "Club landmark in residential locality",
+    "expected_pincode": "500096",
+    "expected_city": "Hyderabad",
+    "category": "Commercial Landmark"
+  },
+  {
+    "id": 48,
+    "address": "Apollo Pharmacy opposite, Yousufguda, Hyderabad",
+    "description": "Pharmacy chain landmark",
+    "expected_pincode": "500045",
+    "expected_city": "Hyderabad",
+    "category": "Retail Landmark"
+  },
+  {
+    "id": 49,
+    "address": "Maitrivanam building opposite, Ameerpet, Hyderabad",
+    "description": "Famous educational institute hub building",
+    "expected_pincode": "500038",
+    "expected_city": "Hyderabad",
+    "category": "Commercial Hub Landmark"
+  },
+  {
+    "id": 50,
+    "address": "Sarathi Studios near, Yousufguda Main Road, Hyderabad",
+    "description": "Studio landmark on main road",
+    "expected_pincode": "500038",
+    "expected_city": "Hyderabad",
+    "category": "Entertainment Landmark"
+  }
+]
