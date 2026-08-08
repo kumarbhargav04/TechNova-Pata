@@ -32,7 +32,6 @@ PATA AI is an intelligent address parsing and geocoding platform that:
 * [x] OpenStreetMap Integration
 * [x] Geocoding
 * [x] Confidence Scoring
-* [x] Explainable AI
 * [x] Multilingual Support
 * [x] Fast API (under 500ms response)
 * [x] Interactive Dashboard
