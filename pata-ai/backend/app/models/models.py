@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 
 class AddressResolveRequest(BaseModel):
@@ -38,16 +38,12 @@ class PincodeDetailSchema(BaseModel):
     latitude: float
     longitude: float
 
-    class Config:
-        from_attributes = True
-
-class UserSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     username: str
     role: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BulkResolveRequest(BaseModel):
     addresses: List[str]

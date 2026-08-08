@@ -784,6 +784,27 @@ export default function Dashboard() {
     }
   };
 
+  const downloadSampleCSV = () => {
+    const sample = [
+      "address",
+      "Opposite Ganesh Temple Kothapet Hyderabad",
+      "Flat 302 Sai Residency opposite post office Whitefield Bangalore",
+      "Hanuman mandir daggara Ram Nagar Hyderabad",
+      "Beside Dominos Pizza Linking Road Bandra West Mumbai 400050",
+      "రామ మందిర్ దగ్గర కొత్తపేట హైదరాబాద్",
+      "Ganesh templ Kothapeta Hyderbad 500038"
+    ].join("\n");
+    const blob = new Blob([sample], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pataai_sample_addresses.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleBulkSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkFile) return;
@@ -798,65 +819,84 @@ export default function Dashboard() {
         setIsBulkRunning(false);
         return;
       }
-      
-      const lines = text.split(/\r?\n/);
-      const addresses: string[] = [];
-      
-      for (let i = 0; i < lines.length; i++) {
-        let row = lines[i].trim();
-        if (!row) continue;
-        
-        if (row.startsWith('"') && row.endsWith('"')) {
-          row = row.slice(1, -1);
-        }
-        
-        if (i === 0 && (row.toLowerCase().startsWith("address") || row.toLowerCase().startsWith("messy"))) {
-          continue;
-        }
-        
-        addresses.push(row);
-      }
-      
-      if (addresses.length === 0) {
-        alert("No valid addresses found in the CSV file.");
+
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length === 0) {
+        alert("The CSV file is empty.");
         setIsBulkRunning(false);
         return;
       }
-      
-      setBulkProgress(25);
-      
-      try {
-        const res = await fetch("http://localhost:8000/api/v1/bulk-resolve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            addresses: addresses,
-            user_id: currentUser ? currentUser.id : null
-          })
-        });
-        
-        setBulkProgress(75);
-        
-        if (res.ok) {
-          const data = await res.json();
-          const formatted = data.map((item: any) => ({
-            address: item.address,
-            coordinates: item.latitude && item.longitude ? `${item.latitude.toFixed(5)}, ${item.longitude.toFixed(5)}` : "Failed",
-            accuracy: `${item.confidence}% Match`,
-            status: item.status
-          }));
-          setBulkResults(formatted);
-          setBulkProgress(100);
-        } else {
-          alert("Bulk resolution failed on the backend.");
-        }
-      } catch (err) {
-        alert("Failed to connect to the backend server.");
-      } finally {
-        setIsBulkRunning(false);
+
+      // --- Smart CSV column detection ---
+      // Parse the header row to detect which column holds the address
+      const headerRow = lines[0];
+      const headerCols = headerRow.split(",").map(h => h.replace(/"/g, "").trim().toLowerCase());
+      const addressColIdx = headerCols.findIndex(h =>
+        h === "address" || h === "messy_address" || h === "raw_address" ||
+        h === "location" || h === "full_address" || h === "delivery_address" ||
+        h === "messy address" || h === "raw address"
+      );
+      // If first column looks like a header (has letters), treat row 0 as header
+      const hasHeader = /[a-zA-Z]/.test(headerRow.split(",")[0]);
+      const startRow = hasHeader ? 1 : 0;
+      const colIdx = addressColIdx >= 0 ? addressColIdx : 0;
+
+      const addresses: string[] = [];
+      for (let i = startRow; i < lines.length; i++) {
+        const row = lines[i];
+        if (!row) continue;
+        // Handle quoted CSV fields
+        const cols = row.match(/(?:"([^"]*(?:""[^"]*)*)"|([^,]*))/g) || [];
+        let cell = cols[colIdx] ?? row;
+        cell = cell.replace(/^"|"$/g, "").replace(/""/g, "").trim();
+        if (cell) addresses.push(cell);
       }
+
+      if (addresses.length === 0) {
+        alert("No valid addresses found in the CSV. Make sure the file has an 'address' column or single-column address list.");
+        setIsBulkRunning(false);
+        return;
+      }
+
+      // --- Process addresses one-by-one with real-time progress ---
+      const results: any[] = [];
+      for (let i = 0; i < addresses.length; i++) {
+        const addr = addresses[i];
+        setBulkProgress(Math.round(((i) / addresses.length) * 100));
+        try {
+          const res = await fetch("http://localhost:8000/api/v1/resolve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              address: addr,
+              user_id: currentUser ? currentUser.id : null
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            results.push({
+              address: addr,
+              coordinates: data.latitude && data.longitude
+                ? `${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)}`
+                : "Failed",
+              accuracy: `${Math.round(data.confidence)}%`,
+              status: "Resolved",
+              ok: true
+            });
+          } else {
+            results.push({ address: addr, coordinates: "—", accuracy: "0%", status: "API Error", ok: false });
+          }
+        } catch {
+          results.push({ address: addr, coordinates: "—", accuracy: "0%", status: "Connection Error", ok: false });
+        }
+        // Stream results as they come in
+        setBulkResults([...results]);
+      }
+
+      setBulkProgress(100);
+      setIsBulkRunning(false);
     };
-    
+
     reader.readAsText(bulkFile);
   };
 
@@ -1500,33 +1540,51 @@ export default function Dashboard() {
         {currentPage === "bulk" && (
           <div className="max-w-4xl mx-auto space-y-5">
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h2 className="text-lg font-bold text-emerald-500 mb-2">CSV Bulk Geocoding Processing</h2>
-              <p className="text-xs opacity-75 mb-4">Upload a CSV containing messy delivery addresses. Our 9-Agent StateGraph will queue and geocode them in parallel.</p>
-              
-              <form onSubmit={handleBulkSubmit} className="space-y-4">
-                <input 
-                  type="file" 
-                  accept=".csv"
-                  onChange={(e: any) => setBulkFile(e.target.files[0])}
-                  className="w-full text-xs p-3 rounded-lg bg-slate-950 border border-slate-800 text-white"
-                />
-                <button 
-                  type="submit" 
-                  disabled={isBulkRunning || !bulkFile}
-                  className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 text-slate-950 font-bold py-2 px-6 rounded-lg text-xs transition"
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-lg font-bold text-emerald-500">CSV Bulk Geocoding</h2>
+                <button
+                  type="button"
+                  onClick={downloadSampleCSV}
+                  className="text-[10px] font-semibold text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-lg hover:bg-emerald-500/10 transition"
                 >
-                  {isBulkRunning ? "Processing CSV..." : "Upload & Geocode"}
+                  Download Sample CSV
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-1">Upload a CSV file with an <code className="text-emerald-400">address</code> column (or single-column list). Supports Hindi, Telugu, Hinglish, and typo-laden addresses.</p>
+              <p className="text-[10px] text-slate-500 mb-4">Supported headers: <code>address</code>, <code>messy_address</code>, <code>raw_address</code>, <code>location</code>, <code>delivery_address</code></p>
+
+              <form onSubmit={handleBulkSubmit} className="space-y-3">
+                <div className="border-2 border-dashed border-slate-700 rounded-xl p-4 text-center hover:border-emerald-500/40 transition">
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={(e: any) => setBulkFile(e.target.files[0])}
+                    className="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-emerald-500 file:text-slate-950 hover:file:bg-emerald-600 cursor-pointer"
+                  />
+                  {bulkFile && <p className="text-[10px] text-emerald-400 mt-2">Selected: {bulkFile.name}</p>}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isBulkRunning || !bulkFile}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:cursor-not-allowed text-slate-950 font-bold py-2.5 px-6 rounded-xl text-xs transition flex items-center justify-center gap-2"
+                >
+                  {isBulkRunning ? (
+                    <><span className="w-3 h-3 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>Processing {bulkProgress}% — {bulkResults.length} resolved...</>
+                  ) : "Upload & Geocode All Addresses"}
                 </button>
               </form>
 
               {isBulkRunning && (
-                <div className="mt-4 space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span>Progress</span>
-                    <span>{bulkProgress}%</span>
+                <div className="mt-4 space-y-2">
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>Geocoding Progress</span>
+                    <span>{bulkProgress}% — {bulkResults.filter(r => r.ok).length} resolved / {bulkResults.filter(r => !r.ok).length} failed</span>
                   </div>
-                  <div className="w-full bg-slate-950 rounded-full h-2">
-                    <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${bulkProgress}%` }}></div>
+                  <div className="w-full bg-slate-950 rounded-full h-2.5">
+                    <div
+                      className="bg-emerald-500 h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${bulkProgress}%` }}
+                    />
                   </div>
                 </div>
               )}
@@ -1534,35 +1592,72 @@ export default function Dashboard() {
 
             {bulkResults.length > 0 && (
               <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider">Geocoding Results</h3>
-                  <button 
+                <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider">Geocoding Results</h3>
+                    <div className="flex gap-2 text-[10px]">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">{bulkResults.filter(r => r.ok).length} Resolved</span>
+                      {bulkResults.filter(r => !r.ok).length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400">{bulkResults.filter(r => !r.ok).length} Failed</span>
+                      )}
+                      <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                        Avg {bulkResults.filter(r => r.ok).length > 0
+                          ? Math.round(bulkResults.filter(r => r.ok).reduce((sum, r) => sum + parseInt(r.accuracy), 0) / bulkResults.filter(r => r.ok).length)
+                          : 0}% confidence
+                      </span>
+                    </div>
+                  </div>
+                  <button
                     onClick={downloadBulkCSV}
-                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-bold px-3 py-1.5 rounded transition"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-[10px] font-bold px-4 py-1.5 rounded-lg transition"
                   >
-                    Download Geocoded CSV
+                    Download Results CSV
                   </button>
                 </div>
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-800 opacity-75">
-                      <th className="pb-2">Address</th>
-                      <th className="pb-2">Coordinates</th>
-                      <th className="pb-2">Confidence</th>
-                      <th className="pb-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bulkResults.map((r, i) => (
-                      <tr key={i} className="border-b border-slate-800/40">
-                        <td className="py-2.5 truncate max-w-[200px]">{r.address}</td>
-                        <td className="py-2.5 font-mono">{r.coordinates}</td>
-                        <td className="py-2.5 text-emerald-500">{r.accuracy}</td>
-                        <td className="py-2.5 text-green-500">{r.status}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400">
+                        <th className="pb-2 pr-4">#</th>
+                        <th className="pb-2 pr-4">Input Address</th>
+                        <th className="pb-2 pr-4">Resolved Coordinates</th>
+                        <th className="pb-2 pr-4">Confidence</th>
+                        <th className="pb-2">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {bulkResults.map((r, i) => (
+                        <tr key={i} className={`border-b border-slate-800/40 ${r.ok ? '' : 'opacity-60'}` }>
+                          <td className="py-2.5 pr-4 text-slate-500">{i + 1}</td>
+                          <td className="py-2.5 pr-4 max-w-[240px]">
+                            <span className="truncate block" title={r.address}>{r.address}</span>
+                          </td>
+                          <td className="py-2.5 pr-4 font-mono text-emerald-400">{r.coordinates}</td>
+                          <td className="py-2.5 pr-4">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                <div
+                                  className="h-1.5 rounded-full bg-emerald-500"
+                                  style={{ width: r.accuracy }}
+                                />
+                              </div>
+                              <span className="text-emerald-400">{r.accuracy}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                              r.ok
+                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                : 'bg-red-500/10 border-red-500/20 text-red-400'
+                            }`}>
+                              {r.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

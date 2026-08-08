@@ -1,7 +1,10 @@
 import os
 import json
+import warnings
 import httpx
-import google.generativeai as genai
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    import google.generativeai as genai
 from dotenv import load_dotenv
 
 # Load environment variables (searches for .env file)
@@ -14,9 +17,7 @@ async def query_llm(prompt: str, response_json: bool = True) -> str:
     """
     # 1. Try Gemini
     gemini_key = os.getenv("GEMINI_API_KEY")
-    if gemini_key and not gemini_key.startswith("AQ."):
-        # Note: AQ. is a fake/invalid prefix often used in placeholders.
-        # If it's a valid key, we configure and run it.
+    if gemini_key:
         try:
             genai.configure(api_key=gemini_key)
             gemini_model = genai.GenerativeModel("gemini-1.5-flash")
