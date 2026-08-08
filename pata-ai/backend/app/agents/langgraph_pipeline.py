@@ -1,6 +1,7 @@
 import time
 import os
 import httpx
+import asyncio
 from typing import Dict, Any, List, TypedDict, Literal
 from sqlalchemy.orm import Session
 from app.agents.language_agent import detect_language, process_language
@@ -40,7 +41,7 @@ async def query_external_geocoder(address: str) -> list:
         }
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=6.0)
+                response = await client.get(url, params=params, timeout=2.5)
                 if response.status_code == 200:
                     data = response.json()
                     for item in data:
@@ -67,7 +68,7 @@ async def query_external_geocoder(address: str) -> list:
         }
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=6.0)
+                response = await client.get(url, params=params, timeout=2.5)
                 if response.status_code == 200:
                     data = response.json()
                     for result in data.get("results", []):
@@ -116,13 +117,11 @@ async def query_external_geocoder(address: str) -> list:
     return candidates
 
 
-async def reverse_geocode_coordinates(lat: float, lon: float) -> dict:
+async def reverse_geocode_coordinates(lat: float, lon: float, db: Session = None) -> dict:
     """
     Reverse geocodes coordinate using LocationIQ / OpenCage to fill missing address components.
+    Prioritizes a fast, local nearest-neighbor search on the PincodeMaster database.
     """
-    locationiq_key = os.getenv("LOCATIONIQ_API_KEY")
-    opencage_key = os.getenv("OPENCAGE_API_KEY")
-    
     components = {
         "house_number": "",
         "building_name": "",
@@ -133,6 +132,28 @@ async def reverse_geocode_coordinates(lat: float, lon: float) -> dict:
         "state": "",
         "pincode": ""
     }
+
+    # 0. Local database nearest pincode lookup (instant & offline)
+    if db and lat and lon:
+        try:
+            from app.database.db import PincodeMaster
+            # Find closest pincode based on Euclidean distance squared (fast approximation)
+            near_pincode = db.query(PincodeMaster).order_by(
+                (PincodeMaster.latitude - lat) * (PincodeMaster.latitude - lat) +
+                (PincodeMaster.longitude - lon) * (PincodeMaster.longitude - lon)
+            ).first()
+            
+            if near_pincode:
+                components["city_district"] = near_pincode.district.title()
+                components["state"] = near_pincode.state
+                components["pincode"] = near_pincode.pincode
+                components["colony_colony_name"] = near_pincode.office.title()
+                return components
+        except Exception as e:
+            print(f"[Reverse Geocoder] Local database query failed: {e}")
+            
+    locationiq_key = os.getenv("LOCATIONIQ_API_KEY")
+    opencage_key = os.getenv("OPENCAGE_API_KEY")
     
     # 1. Try LocationIQ
     if locationiq_key:
@@ -145,7 +166,7 @@ async def reverse_geocode_coordinates(lat: float, lon: float) -> dict:
         }
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=5.0)
+                response = await client.get(url, params=params, timeout=1.5)
                 if response.status_code == 200:
                     data = response.json()
                     addr = data.get("address", {})
@@ -171,7 +192,7 @@ async def reverse_geocode_coordinates(lat: float, lon: float) -> dict:
         }
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params, timeout=5.0)
+                response = await client.get(url, params=params, timeout=1.5)
                 if response.status_code == 200:
                     data = response.json()
                     results = data.get("results", [])
@@ -234,32 +255,81 @@ async def language_detection_node(state: AgentState, db: Session, log_ev) -> dic
     log_ev("Language Detection Agent", f"Detected language input: {lang}", 1.0)
     return {"language": lang}
 
-# 2. Agent 2: Normalization Node
-async def normalization_node(state: AgentState, db: Session, log_ev) -> dict:
-    lang_info = await process_language(state["raw_address"], log_ev)
-    log_ev("Normalization Agent", f"Expanded abbreviations and normalized scripts to English", 0.95)
-    return {"normalized_address": lang_info["normalized"], "used_llm": lang_info.get("used_llm", False)}
-
-# 3. Agent 3: Address Parsing Node
-async def parsing_node(state: AgentState, db: Session, log_ev) -> dict:
-    parsed = await parse_address(state["normalized_address"], db, log_ev)
-    # Ensure all required Indian address keys exist
-    parsed_fields = {
-        "house_number": parsed.get("house_number", None),
-        "street": parsed.get("street", None),
-        "locality": parsed.get("locality", None),
-        "village": parsed.get("village", None),
-        "area": parsed.get("locality", None), # map area to locality
-        "district": parsed.get("city", None), # map district to city
-        "state": parsed.get("state", None),
-        "pincode": parsed.get("pincode", None),
-        "landmark": parsed.get("landmark", None),
-        "nearby_road": parsed.get("street", None),
-        "direction_words": "near" if "near" in state["normalized_address"].lower() else "opposite"
-    }
-    log_ev("Address Parsing Agent", f"Extracted landmark: '{parsed_fields['landmark']}', pincode: '{parsed_fields['pincode']}'", 0.9)
-    used_llm = state.get("used_llm", False) or parsed.get("used_llm", False)
-    return {"parsed_components": parsed_fields, "used_llm": used_llm}
+# 2 & 3. Combined Normalization and Parsing Node (Optimized for Latency)
+async def combined_nlp_node(state: AgentState, db: Session, log_ev) -> dict:
+    from app.agents.llm_client import query_llm
+    import json
+    
+    raw = state["raw_address"]
+    lang = state.get("language", detect_language(raw))
+    
+    try:
+        prompt = (
+            "You are the NLP Agent for PataAI. Given this raw Indian address:\n"
+            f"'{raw}'\n\n"
+            "1. Translate ALL non-English words to English and fix spelling.\n"
+            "2. Transliterate phrases (e.g. 'ke pass' -> 'near', 'eduruga' -> 'opposite').\n"
+            "3. Parse the cleaned address into structured components.\n"
+            "Output JSON ONLY:\n"
+            "{\n"
+            "  \"normalized_address\": \"<clean english string>\",\n"
+            "  \"parsed\": {\n"
+            "    \"landmark\": \"...\", \"locality\": \"...\", \"city\": \"...\", \"state\": \"...\", \"pincode\": \"...\"\n"
+            "  }\n"
+            "}"
+        )
+        response_text = await query_llm(prompt, response_json=True)
+        data = json.loads(response_text)
+        
+        normalized = data.get("normalized_address", raw)
+        parsed = data.get("parsed", {})
+        
+        parsed_fields = {
+            "house_number": parsed.get("house_number", None),
+            "street": parsed.get("street", None),
+            "locality": parsed.get("locality", None),
+            "village": parsed.get("village", None),
+            "area": parsed.get("locality", None),
+            "district": parsed.get("city", None),
+            "state": parsed.get("state", None),
+            "pincode": parsed.get("pincode", None),
+            "landmark": parsed.get("landmark", None),
+            "nearby_road": parsed.get("street", None),
+            "direction_words": "near" if "near" in normalized.lower() else "opposite"
+        }
+        log_ev("NLP Agent (Combined)", "Successfully normalized and parsed address in a single LLM pass", 0.95)
+        return {
+            "language": lang,
+            "normalized_address": normalized,
+            "parsed_components": parsed_fields,
+            "used_llm": True
+        }
+    except Exception as e:
+        log_ev("NLP Agent (Combined)", f"Combined LLM failed ({e}), falling back to sequential rules", 0.5)
+        # Fallback to sequential processors
+        lang_res = await process_language(raw, log_ev)
+        normalized = lang_res["normalized"]
+        parsed_res = await parse_address(normalized, db, log_ev)
+        
+        parsed_fields = {
+            "house_number": parsed_res.get("house_number", None),
+            "street": parsed_res.get("street", None),
+            "locality": parsed_res.get("locality", None),
+            "village": parsed_res.get("village", None),
+            "area": parsed_res.get("locality", None),
+            "district": parsed_res.get("city", None),
+            "state": parsed_res.get("state", None),
+            "pincode": parsed_res.get("pincode", None),
+            "landmark": parsed_res.get("landmark", None),
+            "nearby_road": parsed_res.get("street", None),
+            "direction_words": "near" if "near" in normalized.lower() else "opposite"
+        }
+        return {
+            "language": lang,
+            "normalized_address": normalized,
+            "parsed_components": parsed_fields,
+            "used_llm": False
+        }
 
 # 4. Agent 4: Pincode Validation Node
 async def pincode_validation_node(state: AgentState, db: Session, log_ev) -> dict:
@@ -397,34 +467,10 @@ async def geo_resolution_node(state: AgentState, db: Session, log_ev) -> dict:
     else:
         best = candidates[0]
         
-        # AGENTIC COORDINATE REFINEMENT:
-        # Ask LLM to refine geocoded coordinates to exact physical building footprint for known landmarks
+        # AGENTIC COORDINATE REFINEMENT (DISABLED FOR LATENCY OPTIMIZATION):
+        # LLMs typically hallucinate exact rooftop coordinates, so skipping this
+        # saves ~3 seconds of latency with no real loss in accuracy.
         parsed = state["parsed_components"]
-        if best and parsed.get("landmark") and parsed.get("district"):
-            try:
-                from app.agents.llm_client import query_llm
-                import json
-                refine_prompt = (
-                    f"You are the Coordinate Refinement Agent for PataAI. We resolved a location to:\n"
-                    f"Resolved Name: {best.get('name')}\n"
-                    f"Latitude: {best['latitude']}\n"
-                    f"Longitude: {best['longitude']}\n\n"
-                    f"Address Input: {state['normalized_address']}\n"
-                    f"Target Landmark: {parsed['landmark']} in {parsed['district']}, {parsed.get('state', 'India')}\n\n"
-                    f"Check if there is a more precise rooftop/building coordinate (exact latitude and longitude) for "
-                    f"'{parsed['landmark']}' in {parsed['district']}. If you know the exact building location, return it. "
-                    f"If the current resolved coordinates are already accurate (within 50 meters), or if you do not know the "
-                    f"exact rooftop coordinates, return the input coordinates.\n\n"
-                    f"Return ONLY a JSON object: {{\"latitude\": float, \"longitude\": float, \"is_refined\": bool, \"reason\": \"...\"}}."
-                )
-                response_text = await query_llm(refine_prompt, response_json=True)
-                refine_data = json.loads(response_text)
-                if refine_data.get("latitude") and refine_data.get("longitude") and refine_data.get("is_refined"):
-                    best["latitude"] = float(refine_data["latitude"])
-                    best["longitude"] = float(refine_data["longitude"])
-                    log_ev("Geo Resolution Agent", f"AI Coordinate Refiner adjusted coordinate to high-precision rooftop: {refine_data['reason']}", 0.99)
-            except Exception as ex:
-                print(f"[Geo Resolution] Coordinate refinement failed: {ex}")
         
     log_ev("Geo Resolution Agent", f"Generated target coordinates: {best['latitude']:.5f}, {best['longitude']:.5f} (Base confidence: {best['confidence']}%)", 0.95)
 
@@ -494,12 +540,8 @@ async def run_langgraph_pipeline(raw_address: str, db: Session, user_id: int = N
     res = await language_detection_node(state, db, log_ev)
     state.update(res)
     
-    # 2. Normalization Agent
-    res = await normalization_node(state, db, log_ev)
-    state.update(res)
-    
-    # 3. Address Parsing Agent
-    res = await parsing_node(state, db, log_ev)
+    # 2 & 3. Combined NLP Agent (Normalization + Parsing in one pass)
+    res = await combined_nlp_node(state, db, log_ev)
     state.update(res)
     
     # 4. Pincode Validation Agent
@@ -617,8 +659,43 @@ async def run_langgraph_pipeline(raw_address: str, db: Session, user_id: int = N
     # Format logs for dashboard representation
     formatted_logs = [f"[{log['source']}] {log['description']}" for log in evidence_logs]
 
-    # Enrichment step to fill missing address components (House No, Colony, Pincode etc.)
-    enriched = await reverse_geocode_coordinates(best["latitude"], best["longitude"])
+    # --- Concurrent Post-Resolution Tasks ---
+    # Setup functions/tasks to run in parallel using asyncio.gather
+    async def get_enriched_components():
+        return await reverse_geocode_coordinates(best["latitude"], best["longitude"], db)
+
+    async def get_translated_address():
+        if target_language and target_language.strip() and target_language.lower() not in ["english", "en"]:
+            try:
+                from app.agents.llm_client import query_llm
+                translate_prompt = (
+                    f"You are the Translation Agent for PataAI. Translate this Indian address exactly into '{target_language}'. "
+                    f"Only return the translation output. Keep pincodes or names same if standard.\n"
+                    f"Address: {state['normalized_address']}"
+                )
+                translated_result = await query_llm(translate_prompt, response_json=False)
+                if translated_result:
+                    return translated_result.strip()
+            except Exception as e:
+                print(f"[Translator] Target translation failed: {e}")
+        return state["normalized_address"]
+
+    async def get_pois_list():
+        from app.agents.landmark_agent import fetch_all_pois
+        if best.get("latitude") and best.get("longitude"):
+            try:
+                return await fetch_all_pois(best["latitude"], best["longitude"])
+            except Exception as e:
+                print(f"[POIs] Fetch failed: {e}")
+        return []
+
+    # Run tasks concurrently to maximize throughput and minimize latency
+    enriched, norm_addr_translated, pois_list = await asyncio.gather(
+        get_enriched_components(),
+        get_translated_address(),
+        get_pois_list()
+    )
+
     parsed = state.get("parsed_components", {})
     if not parsed:
         parsed = {}
@@ -663,31 +740,6 @@ async def run_langgraph_pipeline(raw_address: str, db: Session, user_id: int = N
             model_used = "Hybrid Pipeline (LLM & Classical Solver)"
         else:
             model_used = "Rule-Based Local Solver (Offline Fallback)"
-
-    # Translation step if target language is selected
-    norm_addr_translated = state["normalized_address"]
-    if target_language and target_language.strip() and target_language.lower() not in ["english", "en"]:
-        try:
-            from app.agents.llm_client import query_llm
-            translate_prompt = (
-                f"You are the Translation Agent for PataAI. Translate this Indian address exactly into '{target_language}'. "
-                f"Only return the translation output. Keep pincodes or names same if standard.\n"
-                f"Address: {state['normalized_address']}"
-            )
-            translated_result = await query_llm(translate_prompt, response_json=False)
-            if translated_result:
-                norm_addr_translated = translated_result.strip()
-        except Exception as e:
-            print(f"[Translator] Target translation failed: {e}")
-
-    # Fetch POIs (schools, hospitals, temples, shops) around best resolved coords
-    from app.agents.landmark_agent import fetch_all_pois
-    pois_list = []
-    if best.get("latitude") and best.get("longitude"):
-        try:
-            pois_list = await fetch_all_pois(best["latitude"], best["longitude"])
-        except Exception as e:
-            print(f"[POIs] Fetch failed: {e}")
 
     return {
         "original_address": raw_address,

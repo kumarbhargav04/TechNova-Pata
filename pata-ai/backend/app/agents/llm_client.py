@@ -10,6 +10,20 @@ from dotenv import load_dotenv
 # Load environment variables (searches for .env file)
 load_dotenv()
 
+_gemini_model_cache = None
+
+def get_gemini_model():
+    global _gemini_model_cache
+    if _gemini_model_cache is None:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            try:
+                genai.configure(api_key=gemini_key)
+                _gemini_model_cache = genai.GenerativeModel("gemini-1.5-flash")
+            except Exception as e:
+                print(f"[LLM Client] Failed to initialize Gemini model: {e}")
+    return _gemini_model_cache
+
 async def query_llm(prompt: str, response_json: bool = True) -> str:
     """
     Tries to query Gemini first. If it fails, falls back to Groq Llama-3.
@@ -19,21 +33,20 @@ async def query_llm(prompt: str, response_json: bool = True) -> str:
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
         try:
-            genai.configure(api_key=gemini_key)
-            gemini_model = genai.GenerativeModel("gemini-1.5-flash")
-            
-            generation_config = {}
-            if response_json:
-                generation_config["response_mime_type"] = "application/json"
-            
-            response = gemini_model.generate_content(
-                prompt,
-                generation_config=generation_config
-            )
-            if response and response.text:
+            gemini_model = get_gemini_model()
+            if gemini_model:
+                generation_config = {}
                 if response_json:
-                    json.loads(response.text)  # validate JSON
-                return response.text
+                    generation_config["response_mime_type"] = "application/json"
+                
+                response = await gemini_model.generate_content_async(
+                    prompt,
+                    generation_config=generation_config
+                )
+                if response and response.text:
+                    if response_json:
+                        json.loads(response.text)  # validate JSON
+                    return response.text
         except Exception as e:
             print(f"[LLM Client] Gemini call failed: {e}. Falling back to Groq...")
             

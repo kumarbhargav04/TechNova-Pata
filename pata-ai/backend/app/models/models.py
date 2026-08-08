@@ -39,6 +39,8 @@ class PincodeDetailSchema(BaseModel):
     longitude: float
 
     model_config = ConfigDict(from_attributes=True)
+
+class UserSchema(BaseModel):
     id: int
     username: str
     role: str

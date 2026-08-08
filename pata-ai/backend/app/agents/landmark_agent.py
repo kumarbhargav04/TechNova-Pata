@@ -63,7 +63,7 @@ async def search_osm_overpass(query: str, center_lat: float, center_lon: float, 
         return []
         
     overpass_query = f"""
-    [out:json][timeout:5];
+    [out:json][timeout:2];
     (
       node["name"~"{clean_query}",i](around:{radius},{center_lat},{center_lon});
       way["name"~"{clean_query}",i](around:{radius},{center_lat},{center_lon});
@@ -73,7 +73,7 @@ async def search_osm_overpass(query: str, center_lat: float, center_lon: float, 
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(overpass_url, data={"data": overpass_query}, timeout=5.0)
+            response = await client.post(overpass_url, data={"data": overpass_query}, timeout=1.5)
             if response.status_code == 200:
                 data = response.json()
                 results = []
@@ -193,7 +193,7 @@ async def fetch_all_pois(lat: float, lon: float, radius: int = 2500) -> list:
     
     # Overpass QL query looking for schools, hospitals, places of worship, shops, etc.
     overpass_query = f"""
-    [out:json][timeout:6];
+    [out:json][timeout:2];
     (
       node["amenity"~"school|hospital|place_of_worship|bank|restaurant|cafe"](around:{radius},{lat},{lon});
       node["shop"~"supermarket|mall|convenience|pharmacy"](around:{radius},{lat},{lon});
@@ -203,7 +203,7 @@ async def fetch_all_pois(lat: float, lon: float, radius: int = 2500) -> list:
     """
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(overpass_url, data={"data": overpass_query}, timeout=6.0)
+            response = await client.post(overpass_url, data={"data": overpass_query}, timeout=1.8)
             if response.status_code == 200:
                 data = response.json()
                 results = []
