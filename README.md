@@ -48,18 +48,6 @@ Video Demo:
 
 ---
 
-## Screenshots
-
-Placeholder screens from the platform:
-* Home
-* Upload
-* Processing
-* Results
-* Map
-* Analytics
-
----
-
 ## Architecture Diagram
 
 ### Core Pipeline Flow
